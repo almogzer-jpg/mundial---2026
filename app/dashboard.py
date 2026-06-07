@@ -5,8 +5,13 @@
 from __future__ import annotations
 
 import json
+import os
+import sys
 
 import streamlit as st
+
+# ודא ששורש הפרויקט ב-PATH (חשוב בענן: streamlit run app/dashboard.py)
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import config
 import update
