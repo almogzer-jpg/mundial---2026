@@ -1,0 +1,19 @@
+# Secrets — לעולם לא להעלות
+.env
+.streamlit/secrets.toml
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Data / DB (נבנה אוטומטית מהמקורות הפתוחים)
+data/*.db
+data/*.sqlite
+data/cache/
+data/manual/
+data/*.log
+
+# OS / IDE
+.DS_Store
+.vscode/
