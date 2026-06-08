@@ -33,6 +33,8 @@ class Prediction:
     likely_score: str
     top_scores: list[dict]      # [{"score": "2-1", "prob": 0.09}, ...]
     confidence: str             # low / medium / high
+    p_home_big: float = 0.0     # סיכוי ניצחון בית בהפרש 3+
+    p_away_big: float = 0.0     # סיכוי ניצחון חוץ בהפרש 3+
 
 
 class PoissonModel:
@@ -124,6 +126,8 @@ class PoissonModel:
             likely_score=likely,
             top_scores=top,
             confidence=self._confidence(p_home, p_draw, p_away),
+            p_home_big=round(float(np.tril(m, -3).sum()), 4),   # בית מנצח ב-3+
+            p_away_big=round(float(np.triu(m, 3).sum()), 4),    # חוץ מנצח ב-3+
         )
 
     @staticmethod

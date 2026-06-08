@@ -123,6 +123,11 @@ def screen_match():
     c2.metric("תוחלת שערים", f"{p.exp_home_goals:.2f} - {p.exp_away_goals:.2f}")
     c3.metric("רמת ביטחון", CONF_HE[p.confidence])
 
+    # פוטנציאל ניצחון גדול
+    big, who = (p.p_home_big, home) if p.p_home_big >= p.p_away_big else (p.p_away_big, away)
+    if big >= 0.10:
+        st.info(f"💥 סיכוי ש**{who}** תנצח בהפרש **3+ שערים**: {big*100:.0f}%")
+
     st.subheader("5 התוצאות הסבירות ביותר")
     st.dataframe(
         [{"תוצאה": t["score"], "הסתברות %": round(t["prob"] * 100, 1)} for t in p.top_scores],
