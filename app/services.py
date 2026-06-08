@@ -120,6 +120,50 @@ def predict(model, home: str, away: str, neutral: bool = True) -> Prediction:
     return model.predict(home, away, neutral)
 
 
+def h2h_matches(home: str, away: str) -> list[dict]:
+    with db.connection() as conn:
+        rows = conn.execute(
+            "SELECT home_team, away_team, home_score, away_score FROM historical_matches "
+            "WHERE (home_team=? AND away_team=?) OR (home_team=? AND away_team=?) "
+            "ORDER BY date DESC LIMIT 20",
+            (home, away, away, home),
+        ).fetchall()
+    return [{"home": r["home_team"], "away": r["away_team"],
+             "hs": r["home_score"], "as": r["away_score"]} for r in rows]
+
+
+def predict_lab(model, home, away, neutral=True, home_rest=None, away_rest=None,
+                city=None, odds=None, home_locked=False, away_locked=False):
+    """תחזית מלאה עם כל הגורמים (סעיפים 1-8) + פירוק שקוף."""
+    from prediction import factors as F
+    dh_total = da_total = 0.0
+    breakdown = []
+    contributions = [
+        F.fatigue(home_rest, away_rest),
+        F.altitude(home, away, city),
+        F.head_to_head(home, away, h2h_matches(home, away)),
+        F.dead_rubber(home_locked, away_locked),
+    ]
+    for dh, da, desc in contributions:
+        if desc:
+            dh_total += dh
+            da_total += da
+            breakdown.append({"factor": desc, "home": round(dh), "away": round(da)})
+
+    p = model.predict(home, away, neutral, home_delta=dh_total, away_delta=da_total)
+    result = {"pred": p, "breakdown": breakdown, "heat": F.heat_note(city),
+              "elo_delta": (round(dh_total), round(da_total))}
+
+    if odds and all(o and o > 1 for o in odds):
+        op = F.odds_to_probs(*odds)
+        if op:
+            result["odds_probs"] = op
+            result["blended"] = F.blend_with_odds(
+                (p.p_home, p.p_draw, p.p_away), op)
+            result["value"] = F.value_bets((p.p_home, p.p_draw, p.p_away), *odds)
+    return result
+
+
 # --- טבלאות בתים ---
 def standings():
     with db.connection() as conn:

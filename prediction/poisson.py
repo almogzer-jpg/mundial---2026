@@ -64,7 +64,8 @@ class PoissonModel:
     def _avail(self, team: str) -> float:
         return self.availability.get(team, 1.0)
 
-    def expected_goals(self, home: str, away: str, neutral: bool) -> tuple[float, float]:
+    def expected_goals(self, home: str, away: str, neutral: bool,
+                       home_delta: float = 0.0, away_delta: float = 0.0) -> tuple[float, float]:
         hf = 1.0 if neutral else self.s.home_factor
         av_h, av_a = self._avail(home), self._avail(away)
         # אות התקפה/הגנה (קבוצה פצועה כובשת פחות)
@@ -73,10 +74,10 @@ class PoissonModel:
         sup_ad = lam_h_ad - lam_a_ad
         total = lam_h_ad + lam_a_ad
 
-        # אות Elo (פציעות מורידות את ה-Elo האפקטיבי)
+        # אות Elo (פציעות + התאמות פר-משחק מסעיפים 1-8)
         elo_adv = 0.0 if neutral else self.elo_home_adv
-        eff_elo_h = self._elo(home) - (1.0 - av_h) * config.INJURY_ELO_SCALE
-        eff_elo_a = self._elo(away) - (1.0 - av_a) * config.INJURY_ELO_SCALE
+        eff_elo_h = self._elo(home) - (1.0 - av_h) * config.INJURY_ELO_SCALE + home_delta
+        eff_elo_a = self._elo(away) - (1.0 - av_a) * config.INJURY_ELO_SCALE + away_delta
         sup_elo = self.elo_to_goals * (eff_elo_h - eff_elo_a + elo_adv)
 
         # שילוב העליונות; הסך נשמר ממודל ההתקפה/הגנה
@@ -98,8 +99,9 @@ class PoissonModel:
         m[1, 1] *= 1 - r
         return m / m.sum()
 
-    def predict(self, home: str, away: str, neutral: bool = True) -> Prediction:
-        lam_h, lam_a = self.expected_goals(home, away, neutral)
+    def predict(self, home: str, away: str, neutral: bool = True,
+                home_delta: float = 0.0, away_delta: float = 0.0) -> Prediction:
+        lam_h, lam_a = self.expected_goals(home, away, neutral, home_delta, away_delta)
         m = self.score_matrix(lam_h, lam_a)
 
         p_home = float(np.tril(m, -1).sum())   # שורה>עמודה => בית כובש יותר

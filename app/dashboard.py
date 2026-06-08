@@ -113,7 +113,26 @@ def screen_match():
         st.warning("בחר שתי נבחרות שונות.")
         return
 
-    p = services.predict(model, home, away, neutral)
+    # גורמים מתקדמים למשחק זה (סעיפים 1,5,6,8)
+    cities = ["— (ניטרלי)", "Mexico City", "Guadalajara", "Monterrey",
+              "Dallas", "Houston", "Miami", "Atlanta", "Kansas City"]
+    with st.expander("⚙️ גורמים מתקדמים למשחק זה (אופציונלי)"):
+        cc1, cc2, cc3 = st.columns(3)
+        city_sel = cc1.selectbox("אצטדיון / עיר (גובה+חום)", cities)
+        rest_h = cc2.number_input(f"ימי מנוחה — {home}", 1, 14, 4)
+        rest_a = cc3.number_input(f"ימי מנוחה — {away}", 1, 14, 4)
+        st.caption("יחסי הימורים (עשרוני) — הזן כדי לקבל מיזוג עם השוק וזיהוי ערך:")
+        oc1, oc2, oc3 = st.columns(3)
+        o_h = oc1.number_input(f"יחס {home}", 0.0, 100.0, 0.0, step=0.05)
+        o_d = oc2.number_input("יחס תיקו", 0.0, 100.0, 0.0, step=0.05)
+        o_a = oc3.number_input(f"יחס {away}", 0.0, 100.0, 0.0, step=0.05)
+
+    city = None if city_sel.startswith("—") else city_sel
+    odds = (o_h, o_d, o_a) if (o_h > 1 and o_d > 1 and o_a > 1) else None
+    res = services.predict_lab(model, home, away, neutral,
+                               home_rest=rest_h, away_rest=rest_a, city=city, odds=odds)
+    p = res["pred"]
+
     st.markdown(f"### {flags.name_html(home)} נגד {flags.name_html(away)}",
                 unsafe_allow_html=True)
     wdl_bar(p.p_home, p.p_draw, p.p_away,
@@ -122,26 +141,42 @@ def screen_match():
     c1.metric("תוצאה סבירה", p.likely_score)
     c2.metric("תוחלת שערים", f"{p.exp_home_goals:.2f} - {p.exp_away_goals:.2f}")
     c3.metric("רמת ביטחון", CONF_HE[p.confidence])
+    if res.get("heat"):
+        st.caption(res["heat"])
 
-    # מחוון אמינות הנתונים
     if services.confidence_level(home, away) == "strong":
-        st.success("🟢 תחזית מבוססת נתונים חזקים (Elo היסטורי + סגל נוכחי)")
+        st.success("🟢 תחזית מבוססת נתונים חזקים (Elo + סגל נוכחי)")
     else:
-        st.warning("🟡 תחזית חלקית — חסרים נתוני סגל מלאים לאחת הנבחרות")
+        st.warning("🟡 תחזית חלקית — חסרים נתוני סגל מלאים")
+
+    # מיזוג עם השוק + הימורי ערך
+    if res.get("blended"):
+        b = res["blended"]
+        st.markdown(f"**📊 משוקלל עם השוק:** {home} {b[0]*100:.0f}% · "
+                    f"תיקו {b[1]*100:.0f}% · {away} {b[2]*100:.0f}%")
+        for v in res.get("value", []):
+            st.success(f"💰 הימור ערך — {v}")
+        if not res.get("value"):
+            st.caption("אין הימור ערך מובהק מול השוק.")
 
     # מה השפיע על התחזית
-    with st.expander("🔍 מה השפיע על התחזית"):
+    with st.expander("🔍 מה השפיע על התחזית", expanded=True):
         for side in (home, away):
             ti = services.team_info(side)
             base = ti.get("elo") or config.ELO_INITIAL
             adj = config.CTS_WEIGHT * (ti.get("squad_adj") or 0.0)
             avail = model.availability.get(side, 1.0)
             st.markdown(
-                f"**{flags.name_html(side)}** — Elo היסטורי **{base:.0f}** · "
-                f"כוח-סגל נוכחי **{adj:+.0f}** · זמינות **{avail*100:.0f}%**",
+                f"**{flags.name_html(side)}** — Elo **{base:.0f}** · "
+                f"כוח-סגל **{adj:+.0f}** · זמינות **{avail*100:.0f}%**",
                 unsafe_allow_html=True)
-        st.caption("Final Rating = Elo היסטורי + כוח-סגל נוכחי + מוטיבציה. "
-                   "טופס עדכני וסוג המשחק משוקללים בתוך המודל.")
+        if res["breakdown"]:
+            st.markdown("**גורמי משחק (נק' Elo):**")
+            for fct in res["breakdown"]:
+                st.markdown(f"• {fct['factor']}: {home} {fct['home']:+d} / "
+                            f"{away} {fct['away']:+d}")
+        st.caption("Final Rating = Elo + כוח-סגל + גורמי-משחק. "
+                   "טופס וסוג-משחק משוקללים בתוך המודל.")
 
     # פוטנציאל ניצחון גדול
     big, who = (p.p_home_big, home) if p.p_home_big >= p.p_away_big else (p.p_away_big, away)
@@ -154,13 +189,10 @@ def screen_match():
         use_container_width=True, hide_index=True,
     )
 
-    # פציעות (אם יש) + השפעתן על הזמינות
     injuries = services.injuries_by_team()
     for side in (home, away):
         if injuries.get(side):
-            avail = model.availability.get(side, 1.0)
-            st.warning(f"🚑 {side} — חסרים: {', '.join(injuries[side])} "
-                       f"(זמינות {avail*100:.0f}%)")
+            st.warning(f"🚑 {side} — חסרים: {', '.join(injuries[side])}")
 
 
 def screen_groups():
