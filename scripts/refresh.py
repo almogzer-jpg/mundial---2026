@@ -23,6 +23,7 @@ def main() -> None:
     print(f"[OK] משחקי טורניר: {summary['fixtures']}")
     print(f"[OK] תוצאות 2026 שהוזרמו להיסטוריה: {summary['played_synced']}")
     print(f"[OK] דירוגי Elo עודכנו: {summary['ratings']}")
+    print(f"[OK] שחקני סגל (כוח-סגל): {summary.get('squad_players', 0)}")
     print(f"[OK] snapshots תחזית נשמרו: {summary['predictions']}")
     print(f"[OK] פציעות: {summary.get('injuries', 0)}")
 

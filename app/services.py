@@ -42,9 +42,36 @@ def load_fixtures(season: int = 2026) -> list[dict]:
 def load_teams() -> list[dict]:
     with db.connection() as conn:
         rows = conn.execute(
-            "SELECT name, grp, elo FROM teams ORDER BY elo DESC"
+            "SELECT name, grp, elo, ssi, squad_adj, squad_n FROM teams ORDER BY elo DESC"
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+def team_info(name: str) -> dict:
+    with db.connection() as conn:
+        r = conn.execute(
+            "SELECT name, grp, elo, ssi, squad_adj, squad_n FROM teams WHERE name = ?",
+            (name,),
+        ).fetchone()
+    return dict(r) if r else {}
+
+
+def squad(name: str) -> list[dict]:
+    with db.connection() as conn:
+        rows = conn.execute(
+            "SELECT sp.name, sp.pos, sp.age, sp.caps, sp.goals, sp.club, sp.clubnat, sp.rating "
+            "FROM squad_players sp JOIN teams t ON sp.team_id = t.id "
+            "WHERE t.name = ? ORDER BY sp.caps DESC",
+            (name,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def confidence_level(home: str, away: str) -> str:
+    """'strong' אם לשתי הנבחרות יש נתוני סגל, אחרת 'partial'."""
+    ti, ta = team_info(home), team_info(away)
+    n_h, n_a = (ti.get("squad_n") or 0), (ta.get("squad_n") or 0)
+    return "strong" if (n_h >= 15 and n_a >= 15) else "partial"
 
 
 def team_groups() -> dict[str, str]:

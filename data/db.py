@@ -112,6 +112,20 @@ CREATE TABLE IF NOT EXISTS injuries (
     date        TEXT
 );
 
+-- סגל נוכחי (מויקיפדיה) — בסיס ל-Current Team Strength
+CREATE TABLE IF NOT EXISTS squad_players (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    team_id     INTEGER REFERENCES teams(id),
+    name        TEXT,
+    pos         TEXT,
+    age         INTEGER,
+    caps        INTEGER,
+    goals       INTEGER,
+    club        TEXT,
+    clubnat     TEXT,
+    rating      REAL
+);
+
 -- טבלאות בתים
 CREATE TABLE IF NOT EXISTS standings (
     season      INTEGER,
@@ -206,6 +220,11 @@ def _migrate(conn) -> None:
     cols = {r[1] for r in conn.execute("PRAGMA table_info(injuries)").fetchall()}
     if "player_name" not in cols:
         conn.execute("ALTER TABLE injuries ADD COLUMN player_name TEXT")
+    # עמודות כוח-סגל על teams
+    tcols = {r[1] for r in conn.execute("PRAGMA table_info(teams)").fetchall()}
+    for col in ("ssi", "squad_adj", "squad_n"):
+        if col not in tcols:
+            conn.execute(f"ALTER TABLE teams ADD COLUMN {col} REAL")
 
 
 def init_db(db_path: Path | str = None) -> None:

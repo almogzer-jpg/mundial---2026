@@ -77,6 +77,41 @@ def rebuild_ratings(conn) -> int:
     return len(wc_teams)
 
 
+def sync_squads(conn) -> int:
+    """מושך סגלי 2026 מויקיפדיה, שומר, ומחשב התאמות כוח-סגל ל-teams."""
+    from ingestion.squads import parse_squads
+    from prediction import squad as sq
+    try:
+        squads = parse_squads()
+    except Exception:
+        return 0
+    name_to_id = {r["name"]: r["id"]
+                  for r in conn.execute("SELECT id, name FROM teams").fetchall()}
+    squads = {t: ps for t, ps in squads.items() if t in name_to_id}
+    if not squads:
+        return 0
+    adj = sq.compute_adjustments(squads)
+    conn.execute("DELETE FROM squad_players")
+    n = 0
+    for team, players in squads.items():
+        tid = name_to_id[team]
+        for p in players:
+            conn.execute(
+                "INSERT INTO squad_players "
+                "(team_id, name, pos, age, caps, goals, club, clubnat, rating) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (tid, p.name, p.pos, p.age, p.caps, p.goals, p.club, p.clubnat,
+                 round(sq.player_rating(p.clubnat, p.club), 1)),
+            )
+            n += 1
+        a = adj[team]
+        conn.execute(
+            "UPDATE teams SET ssi = ?, squad_adj = ?, squad_n = ? WHERE id = ?",
+            (round(a["ssi"], 1), a["squad_adj"], a["n"], tid),
+        )
+    return n
+
+
 def store_predictions(conn, model) -> int:
     """
     שומר snapshot תחזית לכל משחק שטרם שוחק (NS).
@@ -113,10 +148,12 @@ def full_refresh() -> dict:
     with db.connection() as conn:
         played = sync_played_to_history(conn)    # 2. הזרמה להיסטוריה
         teams = rebuild_ratings(conn)            # 3. Elo מחדש
+        squads = sync_squads(conn)               # 4. כוח סגל נוכחי (ויקיפדיה)
     model = engine.build_model(date.today())     # מודל על נתונים טריים
     with db.connection() as conn:
-        preds = store_predictions(conn, model)   # 4. snapshots
-    summary.update({"played_synced": played, "ratings": teams, "predictions": preds})
+        preds = store_predictions(conn, model)   # 5. snapshots
+    summary.update({"played_synced": played, "ratings": teams,
+                    "squad_players": squads, "predictions": preds})
     return summary
 
 

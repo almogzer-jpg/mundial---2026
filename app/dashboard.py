@@ -123,6 +123,26 @@ def screen_match():
     c2.metric("תוחלת שערים", f"{p.exp_home_goals:.2f} - {p.exp_away_goals:.2f}")
     c3.metric("רמת ביטחון", CONF_HE[p.confidence])
 
+    # מחוון אמינות הנתונים
+    if services.confidence_level(home, away) == "strong":
+        st.success("🟢 תחזית מבוססת נתונים חזקים (Elo היסטורי + סגל נוכחי)")
+    else:
+        st.warning("🟡 תחזית חלקית — חסרים נתוני סגל מלאים לאחת הנבחרות")
+
+    # מה השפיע על התחזית
+    with st.expander("🔍 מה השפיע על התחזית"):
+        for side in (home, away):
+            ti = services.team_info(side)
+            base = ti.get("elo") or config.ELO_INITIAL
+            adj = config.CTS_WEIGHT * (ti.get("squad_adj") or 0.0)
+            avail = model.availability.get(side, 1.0)
+            st.markdown(
+                f"**{flags.name_html(side)}** — Elo היסטורי **{base:.0f}** · "
+                f"כוח-סגל נוכחי **{adj:+.0f}** · זמינות **{avail*100:.0f}%**",
+                unsafe_allow_html=True)
+        st.caption("Final Rating = Elo היסטורי + כוח-סגל נוכחי + מוטיבציה. "
+                   "טופס עדכני וסוג המשחק משוקללים בתוך המודל.")
+
     # פוטנציאל ניצחון גדול
     big, who = (p.p_home_big, home) if p.p_home_big >= p.p_away_big else (p.p_away_big, away)
     if big >= 0.10:
@@ -266,9 +286,25 @@ def screen_team():
     team = st.selectbox("בחר נבחרת", teams)
     info = next(t for t in services.load_teams() if t["name"] == team)
     st.markdown(f"### {flags.name_html(team, height=20)}", unsafe_allow_html=True)
-    c1, c2 = st.columns(2)
+    c1, c2, c3, c4 = st.columns(4)
     c1.metric("דירוג Elo", f"{info['elo']:.0f}")
     c2.metric("בית", info["grp"])
+    adj = config.CTS_WEIGHT * (info.get("squad_adj") or 0.0)
+    c3.metric("כוח סגל (התאמה)", f"{adj:+.0f}")
+    eff = (info["elo"] or config.ELO_INITIAL) + adj
+    c4.metric("Rating אפקטיבי", f"{eff:.0f}")
+
+    players = services.squad(team)
+    if players:
+        st.subheader(f"הסגל הנוכחי ({len(players)} שחקנים)")
+        st.dataframe(
+            [{"שחקן": pl["name"], "עמדה": pl["pos"], "גיל": pl["age"],
+              "קאפים": pl["caps"], "שערים": pl["goals"], "מועדון": pl["club"]}
+             for pl in players],
+            use_container_width=True, hide_index=True,
+        )
+    else:
+        st.info("אין נתוני סגל לנבחרת זו (התחזית מבוססת על Elo בלבד).")
 
     hist = services.elo_history(team)
     if hist:
