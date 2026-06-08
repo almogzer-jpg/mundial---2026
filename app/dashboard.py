@@ -18,14 +18,84 @@ import update
 from app import flags, services
 from ingestion.providers.manual import OVERRIDES_PATH
 
-st.set_page_config(page_title="חיזוי מונדיאל 2026", page_icon="⚽", layout="wide")
+st.set_page_config(page_title="מונדיאל 2026", page_icon="⚽", layout="wide")
 
-# עיצוב קל + יישור ימני לעברית
-st.markdown(
-    "<style>.stApp{direction:rtl;} .stDataFrame{direction:ltr;} "
-    "h1,h2,h3,p,label,div{text-align:right;}</style>",
-    unsafe_allow_html=True,
-)
+GLOBAL_CSS = """
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700;800&display=swap');
+
+html, body, [class*="css"], .stApp, button, input, select, textarea {
+    font-family: 'Heebo', -apple-system, sans-serif !important;
+}
+.stApp { direction: rtl; background:
+    radial-gradient(1200px 600px at 80% -10%, #16271c 0%, #0e1117 55%) fixed; }
+h1, h2, h3, h4, p, label, span, div { text-align: right; }
+
+/* צמצום שוליים עליונים + רוחב נוח */
+.block-container { padding-top: 1.2rem; padding-bottom: 3rem; max-width: 1100px; }
+
+/* באנר עליון */
+.app-header {
+    background: linear-gradient(120deg, #15803d 0%, #0d9488 100%);
+    border-radius: 16px; padding: 18px 22px; margin-bottom: 18px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.35); color: #fff;
+    display: flex; align-items: center; gap: 12px;
+}
+.app-header .ttl { font-size: 26px; font-weight: 800; }
+.app-header .sub { font-size: 14px; opacity: .9; font-weight: 500; }
+
+/* כרטיסים (st.container(border=True)) */
+[data-testid="stVerticalBlockBorderWrapper"] {
+    background: #1b2130; border: 1px solid #2a3344 !important;
+    border-radius: 14px; box-shadow: 0 4px 14px rgba(0,0,0,.25);
+}
+
+/* מטריקות ככרטיסים */
+[data-testid="stMetric"] {
+    background: #1b2130; border: 1px solid #2a3344; border-radius: 12px;
+    padding: 12px 14px;
+}
+[data-testid="stMetricValue"] { font-weight: 800; color: #fff; }
+[data-testid="stMetricLabel"] { opacity: .8; }
+
+/* כפתורים */
+.stButton button {
+    border-radius: 10px; font-weight: 700; border: none;
+    background: linear-gradient(120deg, #16a34a, #0d9488); color: #fff;
+    padding: .5rem 1rem;
+}
+.stButton button:hover { filter: brightness(1.08); }
+
+/* כותרות */
+h1 { font-size: 26px !important; font-weight: 800 !important; }
+h2 { font-size: 21px !important; font-weight: 700 !important; }
+h3 { font-size: 18px !important; font-weight: 700 !important; }
+
+/* סרגל צד */
+section[data-testid="stSidebar"] { background: #11151f; border-left: 1px solid #2a3344; }
+section[data-testid="stSidebar"] .stRadio label { font-weight: 600; }
+
+/* טבלאות */
+[data-testid="stDataFrame"] { border-radius: 12px; overflow: hidden; }
+
+/* expander */
+[data-testid="stExpander"] { border-radius: 12px; border: 1px solid #2a3344; }
+
+/* הסתרת תפריט/פוטר של Streamlit למראה אפליקציה */
+#MainMenu, footer { visibility: hidden; }
+
+/* ===== התאמה לנייד ===== */
+@media (max-width: 640px) {
+    .block-container { padding: .6rem .7rem 2rem !important; }
+    .app-header { padding: 14px 16px; border-radius: 12px; }
+    .app-header .ttl { font-size: 20px; }
+    .app-header .sub { font-size: 12px; }
+    h1 { font-size: 21px !important; }
+    [data-testid="stMetricValue"] { font-size: 1.1rem !important; }
+}
+</style>
+"""
+st.markdown(GLOBAL_CSS, unsafe_allow_html=True)
 
 CONF_HE = {"high": "גבוהה 🟢", "medium": "בינונית 🟡", "low": "נמוכה 🔴"}
 
@@ -56,13 +126,14 @@ def get_sim(n_runs: int, played: int):
 def wdl_bar(p_home, p_draw, p_away, home, away):
     h, d, a = p_home * 100, p_draw * 100, p_away * 100
     st.markdown(
-        f"<div style='display:flex;height:34px;border-radius:6px;overflow:hidden;"
-        f"font-size:13px;color:#fff;text-align:center;line-height:34px'>"
-        f"<div style='width:{h}%;background:#2e7d32'>{h:.0f}%</div>"
-        f"<div style='width:{d}%;background:#9e9e9e'>{d:.0f}%</div>"
-        f"<div style='width:{a}%;background:#1565c0'>{a:.0f}%</div></div>"
-        f"<div style='display:flex;justify-content:space-between;font-size:13px'>"
-        f"<b>{home}</b><span>תיקו</span><b>{away}</b></div>",
+        f"<div style='display:flex;height:40px;border-radius:10px;overflow:hidden;"
+        f"font-size:14px;font-weight:700;color:#fff;text-align:center;line-height:40px;"
+        f"box-shadow:0 2px 8px rgba(0,0,0,.3)'>"
+        f"<div style='width:{h}%;background:linear-gradient(120deg,#16a34a,#15803d)'>{h:.0f}%</div>"
+        f"<div style='width:{d}%;background:#6b7280'>{d:.0f}%</div>"
+        f"<div style='width:{a}%;background:linear-gradient(120deg,#2563eb,#1565c0)'>{a:.0f}%</div></div>"
+        f"<div style='display:flex;justify-content:space-between;font-size:13px;margin-top:4px'>"
+        f"<b>{home}</b><span style='opacity:.7'>תיקו</span><b>{away}</b></div>",
         unsafe_allow_html=True,
     )
 
@@ -427,6 +498,11 @@ SCREENS = {
 
 def main():
     ensure_initialized()   # בונה את הנתונים בהרצה ראשונה (חשוב לענן)
+    st.markdown(
+        '<div class="app-header"><span style="font-size:32px">⚽</span>'
+        '<div><div class="ttl">מונדיאל 2026</div>'
+        '<div class="sub">מנבא התוצאות החכם · Elo · כוח-סגל · גורמי משחק</div></div></div>',
+        unsafe_allow_html=True)
     st.sidebar.title("מונדיאל 2026 ⚽")
     choice = st.sidebar.radio("ניווט", list(SCREENS.keys()))
     st.sidebar.divider()

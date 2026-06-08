@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "mundial",
+      "runtimeExecutable": "C:\\claude\\מונדיאל\\.venv\\Scripts\\python.exe",
+      "runtimeArgs": ["-m", "streamlit", "run", "app/dashboard.py",
+                      "--server.port", "8765", "--server.headless", "true"],
+      "port": 8765
+    }
+  ]
+}
