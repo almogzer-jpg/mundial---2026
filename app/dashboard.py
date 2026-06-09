@@ -163,7 +163,9 @@ def render_review(home, away):
     if ctx["h2h"]["recent"]:
         st.markdown("**מפגשים אחרונים:**")
         st.dataframe(
-            [{"בית": m["home"], "תוצאה": f"{m['hs']}-{m['as']}", "חוץ": m["away"]}
+            [{"תאריך": services.fmt_date(m["date"]),
+              "מסגרת": services.competition_he(m["tournament"]),
+              "בית": m["home"], "תוצאה": f"{m['hs']}-{m['as']}", "חוץ": m["away"]}
              for m in ctx["h2h"]["recent"]],
             use_container_width=True, hide_index=True)
 

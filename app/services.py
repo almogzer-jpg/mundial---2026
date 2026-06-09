@@ -123,13 +123,45 @@ def predict(model, home: str, away: str, neutral: bool = True) -> Prediction:
 def h2h_matches(home: str, away: str) -> list[dict]:
     with db.connection() as conn:
         rows = conn.execute(
-            "SELECT home_team, away_team, home_score, away_score FROM historical_matches "
+            "SELECT date, home_team, away_team, home_score, away_score, tournament "
+            "FROM historical_matches "
             "WHERE (home_team=? AND away_team=?) OR (home_team=? AND away_team=?) "
             "ORDER BY date DESC LIMIT 20",
             (home, away, away, home),
         ).fetchall()
-    return [{"home": r["home_team"], "away": r["away_team"],
-             "hs": r["home_score"], "as": r["away_score"]} for r in rows]
+    return [{"date": r["date"], "home": r["home_team"], "away": r["away_team"],
+             "hs": r["home_score"], "as": r["away_score"],
+             "tournament": r["tournament"]} for r in rows]
+
+
+def competition_he(tournament: str) -> str:
+    """שם הטורניר -> מסגרת בעברית."""
+    t = (tournament or "").lower()
+    if "friendly" in t:
+        return "ידידות"
+    if "world cup" in t and "qualif" in t:
+        return "מוקדמות מונדיאל"
+    if "world cup" in t:
+        return "מונדיאל"
+    if "euro" in t and "qualif" in t:
+        return "מוקדמות יורו"
+    if "euro" in t:
+        return "יורו"
+    if "copa am" in t:
+        return "קופה אמריקה"
+    if "nations league" in t:
+        return "ליגת האומות"
+    if "confederations" in t:
+        return "גביע הקונפדרציות"
+    if "african" in t or "africa cup" in t or "nations cup" in t:
+        return "גביע אפריקה"
+    if "asian cup" in t:
+        return "גביע אסיה"
+    if "gold cup" in t or "concacaf" in t:
+        return "גולד קאפ / קונקקאף"
+    if "qualif" in t:
+        return "מוקדמות"
+    return tournament or "—"
 
 
 def recent_form(team: str, n: int = 5) -> list[dict]:
