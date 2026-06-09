@@ -132,6 +132,63 @@ def h2h_matches(home: str, away: str) -> list[dict]:
              "hs": r["home_score"], "as": r["away_score"]} for r in rows]
 
 
+def recent_form(team: str, n: int = 5) -> list[dict]:
+    """N המשחקים האחרונים של הנבחרת (מנקודת מבטה)."""
+    with db.connection() as conn:
+        rows = conn.execute(
+            "SELECT date, home_team, away_team, home_score, away_score "
+            "FROM historical_matches WHERE home_team=? OR away_team=? "
+            "ORDER BY date DESC LIMIT ?", (team, team, n),
+        ).fetchall()
+    out = []
+    for r in rows:
+        if r["home_team"] == team:
+            gf, ga, opp = r["home_score"], r["away_score"], r["away_team"]
+        else:
+            gf, ga, opp = r["away_score"], r["home_score"], r["home_team"]
+        res = "W" if gf > ga else "L" if gf < ga else "D"
+        out.append({"date": r["date"], "opp": opp, "gf": gf, "ga": ga, "res": res})
+    return out
+
+
+def h2h_record(home: str, away: str) -> dict:
+    matches = h2h_matches(home, away)
+    hw = d = aw = 0
+    for m in matches:
+        if m["hs"] == m["as"]:
+            d += 1
+        else:
+            winner = m["home"] if m["hs"] > m["as"] else m["away"]
+            hw += (winner == home)
+            aw += (winner == away)
+    return {"home_wins": hw, "draws": d, "away_wins": aw,
+            "n": len(matches), "recent": matches[:6]}
+
+
+def top_scorers_of(team: str, n: int = 3) -> list[dict]:
+    scorers = [p for p in squad(team) if (p.get("goals") or 0) > 0]
+    scorers.sort(key=lambda p: p["goals"], reverse=True)
+    return scorers[:n]
+
+
+def match_analysis(model, home: str, away: str, neutral: bool = True):
+    """מחזיר (pred, ctx, sections) לעמוד ניתוח משחק מורחב."""
+    from prediction import review as rv
+    pred = model.predict(home, away, neutral)
+    ih, ia = team_info(home), team_info(away)
+    ctx = {
+        "pred": pred,
+        "elo_home": ih.get("elo") or config.ELO_INITIAL,
+        "elo_away": ia.get("elo") or config.ELO_INITIAL,
+        "adj_home": config.CTS_WEIGHT * (ih.get("squad_adj") or 0.0),
+        "adj_away": config.CTS_WEIGHT * (ia.get("squad_adj") or 0.0),
+        "form_home": recent_form(home), "form_away": recent_form(away),
+        "h2h": h2h_record(home, away),
+        "players_home": top_scorers_of(home), "players_away": top_scorers_of(away),
+    }
+    return pred, ctx, rv.match_review(home, away, ctx)
+
+
 def predict_lab(model, home, away, neutral=True, home_rest=None, away_rest=None,
                 city=None, odds=None, home_locked=False, away_locked=False):
     """תחזית מלאה עם כל הגורמים (סעיפים 1-8) + פירוק שקוף."""
