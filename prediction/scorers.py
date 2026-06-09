@@ -12,17 +12,23 @@
 from __future__ import annotations
 
 # משקל עמדה לנטיית הבקעת שערים
-POS_WEIGHT = {"FW": 1.0, "MF": 0.55, "DF": 0.15, "GK": 0.0}
+POS_WEIGHT = {"FW": 1.0, "MF": 0.6, "DF": 0.2, "GK": 0.0}
+# רצפה לפי עמדה — כך שגם חלוצים ללא שערים מקבלים נתח, והנתח מתפזר ריאלי
+POS_FLOOR = {"FW": 1.2, "MF": 0.4, "DF": 0.1, "GK": 0.0}
+MAX_SHARE = 0.40   # אף שחקן לא יקבל יותר מ-40% משערי הקבוצה
 
 
 def _propensity(player: dict) -> float:
-    """נטיית הבקעה: עמדה × (שערי נבחרת + רצפה קטנה לחלוצים)."""
+    """
+    נטיית הבקעה = עמדה × (שערי קריירה מדועכים + קצב הבקעה נוכחי + רצפת עמדה).
+    דעיכה (goals^0.6) מונעת מוותיק יחיד להשתלט; קצב (שע'/הופעות) מתגמל כושר.
+    """
     pos = (player.get("pos") or "").upper()[:2]
-    pw = POS_WEIGHT.get(pos, 0.3)
+    pw = POS_WEIGHT.get(pos, 0.4)
     goals = player.get("goals") or 0
-    # רצפה קטנה לחלוצים צעירים שעוד לא צברו שערים
-    base = goals + (0.8 if pos == "FW" else 0.0)
-    return pw * base
+    caps = player.get("caps") or 0
+    rate = goals / caps if caps else 0.0
+    return pw * (goals ** 0.6 + 3.0 * rate + POS_FLOOR.get(pos, 0.2))
 
 
 def golden_boot(team_stats: dict[str, dict],
@@ -46,7 +52,8 @@ def golden_boot(team_stats: dict[str, dict],
         for p, w in weighted:
             if w <= 0:
                 continue
-            xg = team_goals * (w / total)
+            share = min(w / total, MAX_SHARE)   # תקרת נתח ריאלית
+            xg = team_goals * share
             if xg >= 0.4:                     # רק מועמדים בעלי משמעות
                 out.append({
                     "player": p["name"], "team": team,
