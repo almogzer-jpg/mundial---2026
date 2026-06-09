@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 CONF_HE = {"high": "גבוהה", "medium": "בינונית", "low": "נמוכה"}
-_RES_HE = {"W": "נ", "D": "ת", "L": "ה"}
+_RES_DOT = {"W": "🟢", "D": "⚪", "L": "🔴"}
 
 
 def _gap_desc(gap: float) -> str:
@@ -21,8 +21,8 @@ def _form_summary(form: list[dict]) -> tuple[int, int, int, str]:
     w = sum(1 for f in form if f["res"] == "W")
     d = sum(1 for f in form if f["res"] == "D")
     lo = sum(1 for f in form if f["res"] == "L")
-    seq = "".join(_RES_HE[f["res"]] for f in form)   # מהאחרון לישן
-    return w, d, lo, seq
+    dots = " ".join(_RES_DOT[f["res"]] for f in form)   # מהאחרון לישן
+    return w, d, lo, dots
 
 
 def match_review(home: str, away: str, ctx: dict) -> list[tuple[str, str]]:
@@ -69,8 +69,8 @@ def match_review(home: str, away: str, ctx: dict) -> list[tuple[str, str]]:
     wh, dh, lh, sh = _form_summary(ctx["form_home"])
     wa, da, la, sa = _form_summary(ctx["form_away"])
     sections.append(("📈 טופס אחרון (5 משחקים)",
-                     f"{home}: {wh} נצ' / {dh} תיקו / {lh} הפ' — {sh or '—'}\n\n"
-                     f"{away}: {wa} נצ' / {da} תיקו / {la} הפ' — {sa or '—'}"))
+                     f"{home} — {wh} נצ' · {dh} תיקו · {lh} הפ'  {sh or '—'}\n\n"
+                     f"{away} — {wa} נצ' · {da} תיקו · {la} הפ'  {sa or '—'}"))
 
     # עימותים ישירים
     h = ctx["h2h"]
