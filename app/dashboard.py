@@ -159,7 +159,7 @@ def render_review(home, away):
     for title, text in sections:
         with st.container(border=True):
             st.markdown(f"**{title}**")
-            st.markdown(text)
+            st.markdown(text, unsafe_allow_html=True)
     if ctx["h2h"]["recent"]:
         st.markdown("**מפגשים אחרונים:**")
         st.dataframe(
