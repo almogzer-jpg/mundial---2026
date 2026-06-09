@@ -18,7 +18,8 @@ import update
 from app import flags, services
 from ingestion.providers.manual import OVERRIDES_PATH
 
-st.set_page_config(page_title="מונדיאל 2026", page_icon="⚽", layout="wide")
+st.set_page_config(page_title="מונדיאל 2026", page_icon="⚽", layout="wide",
+                   initial_sidebar_state="collapsed")
 
 GLOBAL_CSS = """
 <style>
@@ -542,26 +543,26 @@ def main():
         '<div><div class="ttl">מונדיאל 2026</div>'
         '<div class="sub">מנבא התוצאות החכם · Elo · כוח-סגל · גורמי משחק</div></div></div>',
         unsafe_allow_html=True)
-    # ניווט עליון — נגיש תמיד, ידידותי לנייד (במקום סרגל צד מוסתר)
+    # ניווט עליון — נגיש תמיד, ידידותי לנייד (ללא סרגל צד שמתנגש)
     choice = st.selectbox("ניווט", list(SCREENS.keys()), label_visibility="collapsed")
 
-    # סרגל צד — סטטוס + רענון (פעולות משניות)
-    st.sidebar.title("מונדיאל 2026 ⚽")
-    if services.api_connected():
-        st.sidebar.success("🟢 API-Football מחובר")
-    else:
-        st.sidebar.info("⚪ מצב נתונים פתוחים (ללא API)")
-    if st.sidebar.button("🔄 רענן נתונים עכשיו"):
-        with st.spinner("מושך תוצאות, פציעות ומעדכן הכול..."):
-            summary = update.full_refresh()
-        st.cache_data.clear()
-        st.cache_resource.clear()
-        st.sidebar.success(
-            f"עודכן! פציעות: {summary.get('injuries', 0)}, "
-            f"תחזיות: {summary.get('predictions', 0)}")
-    st.sidebar.caption("Elo + Dixon-Coles · נתונים פתוחים + API אופציונלי")
-
     SCREENS[choice]()
+
+    # נתונים ורענון — בתחתית, בתוך expander (לא סרגל צד)
+    st.divider()
+    with st.expander("⚙️ נתונים ורענון"):
+        if services.api_connected():
+            st.success("🟢 API-Football מחובר")
+        else:
+            st.info("⚪ מצב נתונים פתוחים (ללא API)")
+        if st.button("🔄 רענן נתונים עכשיו"):
+            with st.spinner("מושך תוצאות, פציעות ומעדכן הכול..."):
+                summary = update.full_refresh()
+            st.cache_data.clear()
+            st.cache_resource.clear()
+            st.success(f"עודכן! פציעות: {summary.get('injuries', 0)}, "
+                       f"תחזיות: {summary.get('predictions', 0)}")
+        st.caption("Elo + Dixon-Coles · נתונים פתוחים + API אופציונלי")
 
 
 main()
