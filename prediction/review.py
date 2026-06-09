@@ -43,6 +43,18 @@ def match_review(home: str, away: str, ctx: dict) -> list[tuple[str, str]]:
     txt += f"דירוג Elo: {home} {eh:.0f} · {away} {ea:.0f} ({_gap_desc(gap)})."
     sections.append(("📋 הערכה כללית", txt))
 
+    # איך חושב החיזוי (מתודולוגיה למשחק זה)
+    eff_h = eh + ctx["adj_home"]
+    eff_a = ea + ctx["adj_away"]
+    sections.append((
+        "🧮 איך חושב החיזוי",
+        f"המודל (Elo + Dixon-Coles) מחשב **דירוג אפקטיבי** לכל נבחרת — "
+        f"Elo היסטורי + התאמת כוח-סגל: {home} {eff_h:.0f} מול {away} {eff_a:.0f}. "
+        f"מפער הכוחות ומנטיית ההתקפה/הגנה נגזרת **תוחלת השערים** "
+        f"({p.exp_home_goals:.1f}-{p.exp_away_goals:.1f}), ומהתפלגות פואסון של התוצאות "
+        f"מתקבלות ההסתברויות: ניצחון {p.p_home*100:.0f}% · תיקו {p.p_draw*100:.0f}% · "
+        f"הפסד {p.p_away*100:.0f}%. הפרמטרים מכוילים על מונדיאלים 2010–2022."))
+
     # כוח סגל
     ah, aa = ctx["adj_home"], ctx["adj_away"]
     if abs(ah - aa) >= 15:

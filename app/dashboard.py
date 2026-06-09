@@ -153,6 +153,21 @@ def get_sim(n_runs: int, played: int):
     return services.simulate_tournament(get_model(), n_runs=n_runs)
 
 
+def render_review(home, away):
+    """מרנדר סקירה מורחבת — מקטעים + מפגשים אחרונים. משמש בכרטיסים ובמסך הניתוח."""
+    _, ctx, sections = services.match_analysis(get_model(), home, away)
+    for title, text in sections:
+        with st.container(border=True):
+            st.markdown(f"**{title}**")
+            st.markdown(text)
+    if ctx["h2h"]["recent"]:
+        st.markdown("**מפגשים אחרונים:**")
+        st.dataframe(
+            [{"בית": m["home"], "תוצאה": f"{m['hs']}-{m['as']}", "חוץ": m["away"]}
+             for m in ctx["h2h"]["recent"]],
+            use_container_width=True, hide_index=True)
+
+
 def wdl_bar(p_home, p_draw, p_away, home, away):
     h, d, a = p_home * 100, p_draw * 100, p_away * 100
     st.markdown(
@@ -189,6 +204,11 @@ def screen_dashboard():
             wdl_bar(p.p_home, p.p_draw, p.p_away,
                     flags.name_html(f["home"]), flags.name_html(f["away"]))
             st.write(f"תוצאה סבירה: **{p.likely_score}** · ביטחון: {CONF_HE[p.confidence]}")
+            rk = f"rev_{f['id']}"
+            if st.button("📋 סקירה מורחבת — איך הגענו לתחזית?", key=f"b_{f['id']}"):
+                st.session_state[rk] = not st.session_state.get(rk, False)
+            if st.session_state.get(rk, False):
+                render_review(f["home"], f["away"])
 
     st.subheader("🏆 מועמדות לזכייה")
     probs, played_n, _ = get_sim(config.MONTE_CARLO_RUNS, played)
@@ -588,25 +608,12 @@ def screen_analysis():
         st.warning("בחר שתי נבחרות שונות.")
         return
 
-    pred, ctx, sections = services.match_analysis(model, home, away)
+    pred = model.predict(home, away, neutral=True)
     st.markdown(f"### {flags.name_html(home)} נגד {flags.name_html(away)}",
                 unsafe_allow_html=True)
     wdl_bar(pred.p_home, pred.p_draw, pred.p_away,
             flags.name_html(home), flags.name_html(away))
-
-    # הסקירה הכתובה
-    for title, text in sections:
-        with st.container(border=True):
-            st.markdown(f"**{title}**")
-            st.markdown(text)
-
-    # מפגשים אחרונים
-    if ctx["h2h"]["recent"]:
-        st.subheader("מפגשים אחרונים")
-        st.dataframe(
-            [{"בית": m["home"], "תוצאה": f"{m['hs']}-{m['as']}", "חוץ": m["away"]}
-             for m in ctx["h2h"]["recent"]],
-            use_container_width=True, hide_index=True)
+    render_review(home, away)
 
 
 SCREENS = {
