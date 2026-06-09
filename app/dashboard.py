@@ -597,29 +597,9 @@ def screen_accuracy():
     st.dataframe(table[::-1][:12], use_container_width=True, hide_index=True)
 
 
-def screen_analysis():
-    st.title("🔬 ניתוח משחק מורחב")
-    model = get_model()
-    teams = [t["name"] for t in services.load_teams()]
-    c1, c2 = st.columns(2)
-    home = c1.selectbox("נבחרת א'", teams, index=0, key="an_h")
-    away = c2.selectbox("נבחרת ב'", teams, index=1, key="an_a")
-    if home == away:
-        st.warning("בחר שתי נבחרות שונות.")
-        return
-
-    pred = model.predict(home, away, neutral=True)
-    st.markdown(f"### {flags.name_html(home)} נגד {flags.name_html(away)}",
-                unsafe_allow_html=True)
-    wdl_bar(pred.p_home, pred.p_draw, pred.p_away,
-            flags.name_html(home), flags.name_html(away))
-    render_review(home, away)
-
-
 SCREENS = {
     "🏠 דשבורד": screen_dashboard,
     "⚽ תחזית משחק": screen_match,
-    "🔬 ניתוח משחק": screen_analysis,
     "📊 בתים": screen_groups,
     "🏆 נוקאאוט": screen_knockout,
     "👟 מלך שערים": screen_scorers,
