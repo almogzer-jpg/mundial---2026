@@ -1,53 +1,57 @@
 """
-תחזית מלך שערים (Golden Boot).
+תחזית מלך שערים (Golden Boot) — מבוסס נתונים אמיתיים.
 
-הגישה: מהסימולציה מקבלים כמה שערים כל קבוצה צפויה לכבוש לאורך הטורניר
-(כולל כמה רחוק היא מגיעה). מייחסים נתח מהשערים לחלוץ המוביל של הקבוצה:
-    שערים צפויים לשחקן = שערי הקבוצה × נתח השחקן
+הגישה (הגיונית ומבוססת-דאטה, לא רשימה מקודדת):
+  1. מהסימולציה — כמה שערים כל קבוצה צפויה לכבוש בטורניר (כולל כמה רחוק תגיע).
+  2. מהסגל האמיתי (ויקיפדיה) — מחלקים את שערי הקבוצה בין השחקנים לפי
+     "נטיית הבקעה": עמדה (חלוץ > קשר > מגן) × שערי הנבחרת בקריירה של השחקן.
+  3. שערים צפויים לשחקן = שערי הקבוצה × נתח השחקן.
 
-הערה כנה: זוהי הערכה ספקולטיבית. הרשימה והנתחים ניתנים לעריכה כאן.
-אם API-Football מחובר ויש שערים בפועל — אפשר בעתיד לשלב אותם.
+כך מוצגים רק שחקנים שבאמת בסגל, מדורגים לפי הרקורד האמיתי שלהם.
 """
 from __future__ import annotations
 
-# נבחרת -> (שם החלוץ המוביל, נתח השערים שלו מתוך שערי הקבוצה)
-TOP_SCORERS: dict[str, tuple[str, float]] = {
-    "France": ("Kylian Mbappé", 0.38),
-    "England": ("Harry Kane", 0.34),
-    "Argentina": ("Lautaro Martínez", 0.27),
-    "Brazil": ("Vinícius Júnior", 0.27),
-    "Spain": ("Lamine Yamal", 0.22),
-    "Portugal": ("Cristiano Ronaldo", 0.28),
-    "Germany": ("Kai Havertz", 0.24),
-    "Netherlands": ("Memphis Depay", 0.26),
-    "Belgium": ("Romelu Lukaku", 0.34),
-    "Norway": ("Erling Haaland", 0.45),
-    "Uruguay": ("Darwin Núñez", 0.32),
-    "Colombia": ("Luis Díaz", 0.30),
-    "Morocco": ("Youssef En-Nesyri", 0.28),
-    "Egypt": ("Mohamed Salah", 0.42),
-    "Senegal": ("Sadio Mané", 0.30),
-    "Japan": ("Ayase Ueda", 0.24),
-    "Croatia": ("Andrej Kramarić", 0.26),
-    "Mexico": ("Raúl Jiménez", 0.30),
-    "USA": ("Christian Pulisic", 0.28),
-    "Switzerland": ("Breel Embolo", 0.28),
-    "Ecuador": ("Enner Valencia", 0.34),
-    "Australia": ("Mitchell Duke", 0.28),
-}
+# משקל עמדה לנטיית הבקעת שערים
+POS_WEIGHT = {"FW": 1.0, "MF": 0.55, "DF": 0.15, "GK": 0.0}
 
 
-def golden_boot(team_stats: dict[str, dict]) -> list[dict]:
+def _propensity(player: dict) -> float:
+    """נטיית הבקעה: עמדה × (שערי נבחרת + רצפה קטנה לחלוצים)."""
+    pos = (player.get("pos") or "").upper()[:2]
+    pw = POS_WEIGHT.get(pos, 0.3)
+    goals = player.get("goals") or 0
+    # רצפה קטנה לחלוצים צעירים שעוד לא צברו שערים
+    base = goals + (0.8 if pos == "FW" else 0.0)
+    return pw * base
+
+
+def golden_boot(team_stats: dict[str, dict],
+                squads_by_team: dict[str, list[dict]],
+                top_n: int = 15) -> list[dict]:
     """
-    team_stats: פלט הסימולציה {team: {..., 'exp_goals': X}}.
-    מחזיר רשימה ממוינת של מועמדים: {player, team, exp_goals}.
+    team_stats: {team: {'exp_goals': X, ...}} מהסימולציה.
+    squads_by_team: {team: [{name, pos, goals, caps, club}, ...]}.
+    מחזיר רשימה ממוינת: {player, team, club, exp_goals}.
     """
-    out = []
-    for team, (player, share) in TOP_SCORERS.items():
+    out: list[dict] = []
+    for team, players in squads_by_team.items():
         stats = team_stats.get(team)
-        if not stats:
+        if not stats or not players:
             continue
-        exp = stats.get("exp_goals", 0.0) * share
-        out.append({"player": player, "team": team, "exp_goals": round(exp, 2)})
+        team_goals = stats.get("exp_goals", 0.0)
+        weighted = [(p, _propensity(p)) for p in players]
+        total = sum(w for _, w in weighted)
+        if total <= 0:
+            continue
+        for p, w in weighted:
+            if w <= 0:
+                continue
+            xg = team_goals * (w / total)
+            if xg >= 0.4:                     # רק מועמדים בעלי משמעות
+                out.append({
+                    "player": p["name"], "team": team,
+                    "club": p.get("club", ""), "goals_nt": p.get("goals", 0),
+                    "exp_goals": round(xg, 2),
+                })
     out.sort(key=lambda d: d["exp_goals"], reverse=True)
-    return out
+    return out[:top_n]

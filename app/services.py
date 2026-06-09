@@ -181,9 +181,26 @@ def simulate_tournament(model, n_runs: int = config.__dict__.get("MONTE_CARLO_RU
     return probs, played, len(fixtures)
 
 
+def all_squads() -> dict[str, list[dict]]:
+    """כל הסגלים מקובצים לפי נבחרת (לחישוב מלך שערים)."""
+    with db.connection() as conn:
+        rows = conn.execute(
+            "SELECT t.name AS team, sp.name AS pname, sp.pos, sp.goals, "
+            "sp.caps, sp.club FROM squad_players sp "
+            "JOIN teams t ON sp.team_id = t.id"
+        ).fetchall()
+    out: dict[str, list[dict]] = {}
+    for r in rows:
+        out.setdefault(r["team"], []).append({
+            "name": r["pname"], "pos": r["pos"], "goals": r["goals"],
+            "caps": r["caps"], "club": r["club"],
+        })
+    return out
+
+
 def golden_boot(sim_probs: dict) -> list[dict]:
-    """תחזית מלך שערים מתוך פלט הסימולציה."""
-    return scorers.golden_boot(sim_probs)
+    """תחזית מלך שערים מהסגלים האמיתיים + פלט הסימולציה."""
+    return scorers.golden_boot(sim_probs, all_squads())
 
 
 def projected_bracket(model):

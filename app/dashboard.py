@@ -408,15 +408,18 @@ def screen_scorers():
     probs, _, _ = get_sim(config.MONTE_CARLO_RUNS, played)
     ranked = services.golden_boot(probs)
 
-    st.caption("הערכה: שערי הקבוצה הצפויים בטורניר × נתח החלוץ המוביל. "
-               "מתעדכן עם התוצאות.")
-    if ranked:
-        top = ranked[0]
-        st.success(f"🏅 המועמד המוביל: **{top['player']}** ({top['team']}) — "
-                   f"כ-{top['exp_goals']:.1f} שערים צפויים")
+    st.caption("מבוסס על הסגל האמיתי: שערי הקבוצה הצפויים בטורניר × נתח השחקן "
+               "(לפי עמדה ושערי הנבחרת בקריירה). מתעדכן עם התוצאות.")
+    if not ranked:
+        st.info("אין נתוני סגל זמינים כרגע.")
+        return
+    top = ranked[0]
+    st.success(f"🏅 המועמד המוביל: **{top['player']}** ({top['team']}) — "
+               f"כ-{top['exp_goals']:.1f} שערים צפויים")
     st.dataframe(
         [{"#": i + 1, "דגל": flags.flag_url(r["team"]), "שחקן": r["player"],
-          "נבחרת": r["team"], "שערים צפויים": r["exp_goals"]}
+          "נבחרת": r["team"], "מועדון": r.get("club", ""),
+          "שע' בנבחרת": r.get("goals_nt", 0), "שערים צפויים": r["exp_goals"]}
          for i, r in enumerate(ranked[:15])],
         use_container_width=True, hide_index=True,
         column_config={"דגל": st.column_config.ImageColumn("")},
