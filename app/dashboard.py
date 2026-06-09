@@ -82,16 +82,45 @@ section[data-testid="stSidebar"] .stRadio label { font-weight: 600; }
 [data-testid="stExpander"] { border-radius: 12px; border: 1px solid #2a3344; }
 
 /* הסתרת תפריט/פוטר של Streamlit למראה אפליקציה */
-#MainMenu, footer { visibility: hidden; }
+#MainMenu, footer, [data-testid="stToolbar"] { visibility: hidden; }
+
+/* יעדי מגע גדולים (אפליקציוני) */
+div[data-baseweb="select"] > div { min-height: 46px; border-radius: 10px !important; }
+.stButton button { min-height: 46px; }
+/* ניווט עליון בולט */
+.stSelectbox { background: #1b2130; border: 1px solid #2a3344; border-radius: 12px;
+    padding: 4px 8px; }
+
+/* טבלאות בתים מעוצבות (קומפקטיות לנייד) */
+.gcard { background:#1b2130; border:1px solid #2a3344; border-radius:14px;
+    padding:10px 12px; margin-bottom:12px; }
+.gtitle { font-weight:800; color:#22c55e; margin-bottom:6px; font-size:15px; }
+table.grp { width:100%; border-collapse:collapse; font-size:13px; }
+table.grp th { color:#9aa0a6; font-weight:600; font-size:10px; padding:5px 3px;
+    border-bottom:1px solid #2a3344; text-align:center; }
+table.grp td { padding:8px 3px; border-bottom:1px solid #20283a; text-align:center; }
+table.grp td.tm { text-align:right; white-space:nowrap; font-weight:600; }
+table.grp td.pts { font-weight:800; color:#fff; }
+table.grp tr.q td:first-child { box-shadow: inset 3px 0 0 #22c55e; }
+table.grp img { height:14px; vertical-align:middle; margin-left:6px; border-radius:2px; }
 
 /* ===== התאמה לנייד ===== */
 @media (max-width: 640px) {
-    .block-container { padding: .6rem .7rem 2rem !important; }
+    .block-container { padding: .5rem .6rem 2rem !important; }
     .app-header { padding: 14px 16px; border-radius: 12px; }
     .app-header .ttl { font-size: 20px; }
-    .app-header .sub { font-size: 12px; }
-    h1 { font-size: 21px !important; }
-    [data-testid="stMetricValue"] { font-size: 1.1rem !important; }
+    .app-header .sub { font-size: 11px; }
+    h1 { font-size: 20px !important; }
+    h2 { font-size: 18px !important; }
+    [data-testid="stMetricValue"] { font-size: 1.15rem !important; }
+    /* עמודות נערמות לרוחב מלא */
+    [data-testid="stHorizontalBlock"] { flex-wrap: wrap; gap: .4rem; }
+    [data-testid="column"] { flex: 1 1 100% !important; min-width: 100% !important; }
+    /* טבלאות קומפקטיות */
+    [data-testid="stDataFrame"] { font-size: 11px; }
+    /* כפתורים ובחירה ברוחב מלא */
+    .stButton button { width: 100%; }
+    .app-header span { font-size: 26px !important; }
 }
 </style>
 """
@@ -266,21 +295,31 @@ def screen_match():
             st.warning(f"🚑 {side} — חסרים: {', '.join(injuries[side])}")
 
 
+def group_table_html(g, rows):
+    body = ""
+    for i, row in enumerate(rows):
+        q = "q" if i < 2 else ""
+        body += (
+            f"<tr class='{q}'><td>{i+1}</td>"
+            f"<td class='tm'>{flags.img(row.team)}{row.team}</td>"
+            f"<td>{row.played}</td><td>{row.win}-{row.draw}-{row.loss}</td>"
+            f"<td>{row.gd:+d}</td><td class='pts'>{row.points}</td></tr>"
+        )
+    return (
+        f"<div class='gcard'><div class='gtitle'>בית {g}</div>"
+        f"<table class='grp'><tr><th>#</th><th>נבחרת</th><th>מש'</th>"
+        f"<th>נ-ת-ה</th><th>±</th><th>נק'</th></tr>{body}</table></div>"
+    )
+
+
 def screen_groups():
     st.title("📊 טבלאות הבתים")
+    st.caption("ירוק = מקום העפלה (2 ראשונים). מתעדכן עם הזנת תוצאות.")
     tables = services.standings()
     cols = st.columns(2)
     for i, (g, rows) in enumerate(sorted(tables.items())):
         with cols[i % 2]:
-            st.subheader(f"בית {g}")
-            st.dataframe(
-                [{"#": r + 1, "דגל": flags.flag_url(row.team), "נבחרת": row.team,
-                  "מש'": row.played, "נצ'": row.win, "תיקו": row.draw,
-                  "הפ'": row.loss, "+/-": row.gd, "נק'": row.points}
-                 for r, row in enumerate(rows)],
-                use_container_width=True, hide_index=True,
-                column_config={"דגל": st.column_config.ImageColumn("")},
-            )
+            st.markdown(group_table_html(g, rows), unsafe_allow_html=True)
 
 
 BRACKET_CSS = """
@@ -503,11 +542,11 @@ def main():
         '<div><div class="ttl">מונדיאל 2026</div>'
         '<div class="sub">מנבא התוצאות החכם · Elo · כוח-סגל · גורמי משחק</div></div></div>',
         unsafe_allow_html=True)
-    st.sidebar.title("מונדיאל 2026 ⚽")
-    choice = st.sidebar.radio("ניווט", list(SCREENS.keys()))
-    st.sidebar.divider()
+    # ניווט עליון — נגיש תמיד, ידידותי לנייד (במקום סרגל צד מוסתר)
+    choice = st.selectbox("ניווט", list(SCREENS.keys()), label_visibility="collapsed")
 
-    # מצב מקור הנתונים + רענון
+    # סרגל צד — סטטוס + רענון (פעולות משניות)
+    st.sidebar.title("מונדיאל 2026 ⚽")
     if services.api_connected():
         st.sidebar.success("🟢 API-Football מחובר")
     else:
