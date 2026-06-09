@@ -142,6 +142,36 @@ def store_predictions(conn, model) -> int:
     return n
 
 
+def store_simulation(conn, model) -> int:
+    """מריץ Monte-Carlo ושומר את התוצאות ב-tournament_sim (לטעינה מיידית ב-UI)."""
+    from tournament import simulate
+    fixtures = simulate.group_fixtures_from_db(conn)
+    team_groups = {
+        r["name"]: r["grp"]
+        for r in conn.execute("SELECT name, grp FROM teams WHERE grp IS NOT NULL").fetchall()
+    }
+    probs = simulate.simulate(model, fixtures, team_groups,
+                              n_runs=config.MONTE_CARLO_RUNS)
+    name_to_id = {r["name"]: r["id"]
+                  for r in conn.execute("SELECT id, name FROM teams").fetchall()}
+    now = datetime.now(timezone.utc).isoformat()
+    conn.execute("DELETE FROM tournament_sim")
+    n = 0
+    for team, p in probs.items():
+        tid = name_to_id.get(team)
+        if tid is None:
+            continue
+        conn.execute(
+            "INSERT INTO tournament_sim (run_at, team_id, p_advance, p_round16, "
+            "p_quarter, p_semi, p_final, p_winner, exp_goals) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (now, tid, p["advance"], p["round16"], p["quarter"], p["semi"],
+             p["final"], p["winner"], p.get("exp_goals", 0.0)),
+        )
+        n += 1
+    return n
+
+
 def full_refresh() -> dict:
     """מריץ את כל שרשרת העדכון ומחזיר סיכום."""
     summary = loader.run()                       # 1. קליטה מחדש
@@ -152,8 +182,9 @@ def full_refresh() -> dict:
     model = engine.build_model(date.today())     # מודל על נתונים טריים
     with db.connection() as conn:
         preds = store_predictions(conn, model)   # 5. snapshots
+        sims = store_simulation(conn, model)     # 6. סימולציה ל-DB (טעינה מיידית)
     summary.update({"played_synced": played, "ratings": teams,
-                    "squad_players": squads, "predictions": preds})
+                    "squad_players": squads, "predictions": preds, "sim_teams": sims})
     return summary
 
 

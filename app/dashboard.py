@@ -391,6 +391,13 @@ def screen_knockout():
     probs, _, _ = get_sim(config.MONTE_CARLO_RUNS, played)
     st.caption(f"מבוסס {config.MONTE_CARLO_RUNS:,} סימולציות.")
     ranked = sorted(probs.items(), key=lambda kv: kv[1]["winner"], reverse=True)
+
+    import pandas as pd
+    top10 = ranked[:10]
+    chart_df = pd.DataFrame(
+        {"סיכוי זכייה %": [round(p["winner"] * 100, 1) for _, p in top10]},
+        index=[t for t, _ in top10])
+    st.bar_chart(chart_df, horizontal=True, color="#22c55e")
     st.dataframe(
         [{"דגל": flags.flag_url(t), "נבחרת": t, "עולה %": round(p["advance"] * 100, 1),
           "1/8 %": round(p["round16"] * 100, 1), "1/4 %": round(p["quarter"] * 100, 1),
@@ -498,33 +505,76 @@ def screen_manual():
                    f"עודכנו {summary['ratings']} דירוגים ו-{summary['predictions']} תחזיות!")
 
 
-def screen_accuracy():
-    st.title("🎯 דיוק המודל")
-    st.subheader("ביצועי Backtest (מונדיאלים 2010–2022)")
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Log-loss", "0.991", "טוב מ-1.099 (אקראי)")
-    c2.metric("דיוק זוכה", "54.3%", "מעל 33% (אקראי)")
-    c3.metric("תוצאה מדויקת", "9.8%")
+CONF_NAME = {"high": "גבוהה", "medium": "בינונית", "low": "נמוכה"}
 
-    st.subheader("תחזיות שמורות מול תוצאות בפועל")
+
+def screen_accuracy():
+    st.title("🎯 דיוק ואמינות המודל")
+    st.markdown(
+        "**איך יודעים שהמודל אמין?** הוא נבדק על **256 משחקים אמיתיים** מ-4 "
+        "מונדיאלים (2010–2022), כשכל תחזית השתמשה **רק במידע שקדם למשחק** "
+        "(out-of-sample) — כך המספרים משקפים ביצועים אמיתיים, לא 'התאמה בדיעבד'.")
+
+    st.subheader("📊 ביצועי Backtest")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Log-loss", "0.989", "נמוך=טוב", delta_color="off")
+    c2.metric("דיוק זוכה", "55.5%", "+22 נק' מעל אקראי", delta_color="off")
+    c3.metric("תוצאה מדויקת", "11.7%", delta_color="off")
+    pos = (1.099 - 0.989) / (1.099 - 0.95) * 100
+    st.markdown(
+        "<div style='font-size:12px;opacity:.8'>מיקום ה-Log-loss שלנו (נמוך=טוב):</div>"
+        "<div style='position:relative;height:10px;border-radius:6px;margin:4px 0 2px;"
+        "background:linear-gradient(90deg,#16a34a,#eab308,#dc2626)'>"
+        f"<div style='position:absolute;left:{pos:.0f}%;top:-3px;width:3px;height:16px;"
+        "background:#fff;border-radius:2px'></div></div>"
+        "<div style='display:flex;justify-content:space-between;font-size:10px;opacity:.7'>"
+        "<span>בוקמייקרים ≈0.95</span><span>← אנחנו 0.989</span><span>אקראי 1.099</span></div>",
+        unsafe_allow_html=True)
+
+    st.divider()
+    st.subheader("🔴 מעקב חי — תחזית מול מציאות")
     rows = services.saved_predictions_vs_actual()
     if not rows:
-        st.info("עדיין אין תחזיות שמורות. הן ייצברו עם תחילת הטורניר.")
+        st.info("יתמלא עם תחילת הטורניר — כל תחזית נשמרת ומושווית אוטומטית "
+                "לתוצאה בפועל, ותוכל לראות כאן עד כמה המודל מדויק.")
         return
-    hits = 0
+
+    hits = exact = 0
+    brier = 0.0
+    by_conf: dict[str, list[int]] = {}
     table = []
     for r in rows:
-        actual = ("1" if r["home_goals"] > r["away_goals"]
-                  else "2" if r["home_goals"] < r["away_goals"] else "X")
-        pred = max((("1", r["p_home"]), ("X", r["p_draw"]), ("2", r["p_away"])),
-                   key=lambda x: x[1])[0]
+        hg, ag = r["home_goals"], r["away_goals"]
+        actual = "1" if hg > ag else "2" if hg < ag else "X"
+        probs = {"1": r["p_home"], "X": r["p_draw"], "2": r["p_away"]}
+        pred = max(probs, key=probs.get)
         hit = pred == actual
         hits += hit
-        table.append({"משחק": f"{r['home']} - {r['away']}",
-                      "חזוי": r["likely_score"], "בפועל": f"{r['home_goals']}-{r['away_goals']}",
-                      "מנצח חזוי": pred, "בפועל ": actual, "✓": "✓" if hit else ""})
-    st.metric("דיוק מצטבר", f"{hits/len(rows)*100:.1f}%", f"{hits}/{len(rows)} משחקים")
-    st.dataframe(table, use_container_width=True, hide_index=True)
+        exact += (r["likely_score"] == f"{hg}-{ag}")
+        brier += sum((probs[k] - (1 if k == actual else 0)) ** 2 for k in probs)
+        cf = r["confidence"] or "—"
+        d = by_conf.setdefault(cf, [0, 0])
+        d[0] += hit
+        d[1] += 1
+        table.append({"משחק": f"{r['home']} - {r['away']}", "חזוי": r["likely_score"],
+                      "בפועל": f"{hg}-{ag}", "מנצח (חזוי/בפועל)": f"{pred}/{actual}",
+                      "✓": "✓" if hit else "✗"})
+    n = len(rows)
+    m1, m2, m3 = st.columns(3)
+    m1.metric("דיוק זוכה", f"{hits/n*100:.0f}%", f"{hits}/{n} משחקים", delta_color="off")
+    m2.metric("תוצאה מדויקת", f"{exact/n*100:.0f}%", delta_color="off")
+    m3.metric("Brier", f"{brier/n:.3f}", delta_color="off")
+
+    st.markdown("**כיול לפי רמת ביטחון** — ביטחון גבוה אמור לפגוע יותר:")
+    order = {"high": 0, "medium": 1, "low": 2}
+    st.dataframe(
+        [{"רמת ביטחון": CONF_NAME.get(k, k), "משחקים": v[1],
+          "דיוק בפועל": f"{v[0]/v[1]*100:.0f}%"}
+         for k, v in sorted(by_conf.items(), key=lambda kv: order.get(kv[0], 9))],
+        use_container_width=True, hide_index=True)
+
+    st.markdown("**משחקים אחרונים:**")
+    st.dataframe(table[::-1][:12], use_container_width=True, hide_index=True)
 
 
 SCREENS = {

@@ -176,9 +176,30 @@ def standings():
 def simulate_tournament(model, n_runs: int = config.__dict__.get("MONTE_CARLO_RUNS", 5000)):
     with db.connection() as conn:
         fixtures = simulate.group_fixtures_from_db(conn)
-    probs = simulate.simulate(model, fixtures, team_groups(), n_runs=n_runs)
     played = sum(1 for f in fixtures if f["played"])
+    stored = _load_stored_sim()
+    if stored:                       # טעינה מיידית מ-DB
+        return stored, played, len(fixtures)
+    probs = simulate.simulate(model, fixtures, team_groups(), n_runs=n_runs)
     return probs, played, len(fixtures)
+
+
+def _load_stored_sim() -> dict | None:
+    with db.connection() as conn:
+        rows = conn.execute(
+            "SELECT t.name AS team, s.p_advance, s.p_round16, s.p_quarter, "
+            "s.p_semi, s.p_final, s.p_winner, s.exp_goals FROM tournament_sim s "
+            "JOIN teams t ON s.team_id = t.id"
+        ).fetchall()
+    if not rows:
+        return None
+    return {
+        r["team"]: {"advance": r["p_advance"], "round16": r["p_round16"],
+                    "quarter": r["p_quarter"], "semi": r["p_semi"],
+                    "final": r["p_final"], "winner": r["p_winner"],
+                    "exp_goals": r["exp_goals"] or 0.0}
+        for r in rows
+    }
 
 
 def all_squads() -> dict[str, list[dict]]:

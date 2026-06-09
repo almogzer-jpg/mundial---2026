@@ -225,6 +225,9 @@ def _migrate(conn) -> None:
     for col in ("ssi", "squad_adj", "squad_n"):
         if col not in tcols:
             conn.execute(f"ALTER TABLE teams ADD COLUMN {col} REAL")
+    scols = {r[1] for r in conn.execute("PRAGMA table_info(tournament_sim)").fetchall()}
+    if "exp_goals" not in scols:
+        conn.execute("ALTER TABLE tournament_sim ADD COLUMN exp_goals REAL")
 
 
 def init_db(db_path: Path | str = None) -> None:
