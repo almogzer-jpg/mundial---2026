@@ -190,7 +190,7 @@ def screen_dashboard():
     st.title("⚽ חיזוי מונדיאל 2026")
     model = get_model()
     fixtures = services.load_fixtures()
-    upcoming = [f for f in fixtures if f["status"] == "NS"][:6]
+    upcoming = [f for f in fixtures if f["status"] == "NS"][:10]
     played = sum(1 for f in fixtures if f["home_goals"] is not None)
 
     c1, c2, c3 = st.columns(3)
